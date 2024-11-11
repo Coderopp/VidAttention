@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attention-Player</title>
+    <script src="https://cdn.jsdelivr.net/npm/webgazer@latest/webgazer.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f2f4f7;
+            color: #333;
+            padding: 20px;
+        }
+
+        h2 {
+            color: #2c3e50;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        #controls-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+            gap: 10px;
+        }
+
+        #video-container {
+            margin-top: 20px;
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        #attention-display {
+            font-size: 18px;
+            margin-top: 10px;
+            font-weight: bold;
+            color: #2ecc71;
+        }
+
+        #attention-notification {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(255, 69, 58, 0.9);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            font-size: 18px;
+            z-index: 1000;
+        }
+
+        #start-tracking-btn {
+            padding: 10px 20px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            background-color: #3498db;
+            color: white;
+            cursor: pointer;
+        }
+
+        #start-tracking-btn:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h2>Attention-Player</h2>
+
+    <!-- Controls -->
+    <div id="controls-container">
+        <label for="video-file">Upload a Video:</label>
+        <input type="file" id="video-file" accept="video/*" onchange="loadVideo()">
+        <button id="start-tracking-btn" onclick="initializeWebGazer()">Start Tracking Attention</button>
+    </div>
+
+    <!-- Video Player Container -->
+    <div id="video-container">
+        <video id="video-player" controls></video>
+    </div>
+
+    <!-- Attention Display and Notification -->
+    <div id="attention-display">Attention: 100%</div>
+    <div id="attention-notification">⚠ Please pay attention to the video!</div>
+
+    <script>
+        let attentionThreshold = 5; // Time in seconds the user can look away before notification
+        let gazeAwayTime = 0; // Time spent looking away
+        let attentionPercentage = 100;
+
+        // Load Video
+        function loadVideo() {
+            const videoInput = document.getElementById("video-file");
+            const videoPlayer = document.getElementById("video-player");
+            const file = videoInput.files[0];
+
+            if (file) {
+                // Create a URL for the selected file
+                const videoURL = URL.createObjectURL(file);
+                videoPlayer.src = videoURL;
+                videoPlayer.load();
+                videoPlayer.play();
+            }
+        }
+
+        // Initialize WebGazer and request camera access
+        function initializeWebGazer() {
+            console.log("Initializing WebGazer...");
+
+            // Begin WebGazer to request webcam permission and start gaze tracking
+            webgazer.begin()
+                .then(() => {
+                    console.log("WebGazer started successfully and camera access granted.");
+                    webgazer.showVideoPreview(true); // Show webcam preview
+
+                    // Start tracking gaze once WebGazer is initialized
+                    startAttentionTracking();
+                })
+                .catch(error => {
+                    console.error("WebGazer failed to start or camera access was denied:", error);
+                });
+        }
+
+        // Attention Tracking with WebGazer
+        function startAttentionTracking() {
+            gazeAwayTime = 0; // Reset gaze away time on start
+            attentionPercentage = 100;
+
+            webgazer.setGazeListener((data, timestamp) => {
+                if (data == null) {
+                    gazeAwayTime += 1;
+                } else {
+                    const screenCenterX = window.innerWidth / 2;
+                    const screenCenterY = window.innerHeight / 2;
+
+                    const gazeX = data.x;
+                    const gazeY = data.y;
+
+                    const distanceX = Math.abs(gazeX - screenCenterX);
+                    const distanceY = Math.abs(gazeY - screenCenterY);
+
+                    // Check if gaze is focused on the center of the screen
+                    if (distanceX > screenCenterX / 3 || distanceY > screenCenterY / 3) {
+                        gazeAwayTime += 1;
+                    } else {
+                        gazeAwayTime = 0;
+                    }
+                }
+
+                // Update attention percentage based on gazeAwayTime
+                if (gazeAwayTime >= attentionThreshold) {
+                    attentionPercentage -= 10; // Decrease attention percentage
+                    document.getElementById("attention-notification").style.display = "block";
+                    gazeAwayTime = 0; // Reset gaze away time
+                } else {
+                    attentionPercentage = Math.min(100, attentionPercentage + 1); // Gradually restore attention
+                    document.getElementById("attention-notification").style.display = "none";
+                }
+
+                // Display the current attention percentage
+                document.getElementById("attention-display").innerText = `Attention: ${attentionPercentage}%`;
+            });
+        }
+
+        // Stop WebGazer when user exits
+        window.onbeforeunload = function () {
+            webgazer.end();
+        };
+    </script>
+
+</body>
+
+</html>
